@@ -15,28 +15,26 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
+      // 1. 调用内容生成 API
       const dailyPlan = await generateDailyPlan();
       setPlan(dailyPlan);
       
-      // Once we have text, trigger image generation
+      // 2. 依次调用生图 API (为了展示动态效果，不使用 Promise.all)
       setIsLoadingImages(true);
-      const [bImg, lImg, dImg] = await Promise.all([
-        generateRecipeImage(dailyPlan.breakfast.imagePrompt),
-        generateRecipeImage(dailyPlan.lunch.imagePrompt),
-        generateRecipeImage(dailyPlan.dinner.imagePrompt),
-      ]);
-
-      setPlan(prev => prev ? ({
-        ...prev,
-        breakfast: { ...prev.breakfast, imageUrl: bImg, type: '早餐' },
-        lunch: { ...prev.lunch, imageUrl: lImg, type: '午餐' },
-        dinner: { ...prev.dinner, imageUrl: dImg, type: '晚餐' },
-      }) : null);
+      
+      const bImg = await generateRecipeImage(dailyPlan.breakfast.imagePrompt);
+      setPlan(prev => prev ? ({ ...prev, breakfast: { ...prev.breakfast, imageUrl: bImg, type: '早餐' } }) : null);
+      
+      const lImg = await generateRecipeImage(dailyPlan.lunch.imagePrompt);
+      setPlan(prev => prev ? ({ ...prev, lunch: { ...prev.lunch, imageUrl: lImg, type: '午餐' } }) : null);
+      
+      const dImg = await generateRecipeImage(dailyPlan.dinner.imagePrompt);
+      setPlan(prev => prev ? ({ ...prev, dinner: { ...prev.dinner, imageUrl: dImg, type: '晚餐' } }) : null);
       
       setIsLoadingImages(false);
     } catch (err) {
       console.error(err);
-      setError("获取今日食谱失败了，请检查网络后再试。");
+      setError("调取 AI 专家库失败了，可能是网络开小差。");
     } finally {
       setIsLoading(false);
     }
@@ -44,121 +42,166 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchPlan();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchPlan]);
 
   const today = new Date();
   const dateFormatted = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-3xl">🍲</span>
-            <h1 className="text-2xl font-bold text-green-700">长辈养生管家</h1>
+    <div className="min-h-screen pb-20 bg-[#f9faf6]">
+      <header className="bg-white border-b border-green-100 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-green-600 w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-green-200">🥗</div>
+            <div>
+              <h1 className="text-2xl font-black text-green-800 tracking-tight">长辈养生管家</h1>
+              <p className="text-xs text-green-600 font-bold uppercase tracking-widest">Powered by Gemini AI</p>
+            </div>
           </div>
-          <div className="text-gray-500 font-medium">{dateFormatted}</div>
+          <div className="flex items-center gap-4">
+            <span className="hidden md:block text-gray-400 font-medium">{dateFormatted}</span>
+            <button 
+              onClick={fetchPlan}
+              disabled={isLoading}
+              className="flex items-center gap-2 bg-green-50 text-green-700 px-5 py-2 rounded-full font-bold hover:bg-green-100 transition-all border border-green-200 disabled:opacity-50"
+            >
+              <span className={isLoading ? 'animate-spin' : ''}>🔄</span>
+              {isLoading ? '调取中...' : '刷新今日方案'}
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 mt-8 space-y-12">
+      <main className="max-w-5xl mx-auto px-4 mt-10 space-y-12">
         {/* Welcome Banner */}
-        <section className="bg-gradient-to-r from-green-600 to-emerald-700 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
-          <div className="relative z-10">
-            <h2 className="text-3xl font-bold mb-3">爷爷奶奶、叔叔阿姨，早安！</h2>
+        <section className="bg-gradient-to-br from-green-700 via-green-600 to-emerald-600 rounded-[2rem] p-10 text-white shadow-2xl relative overflow-hidden group">
+          <div className="relative z-10 space-y-4">
+            <div className="inline-block bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-sm font-bold">退休生活 · 健康为本</div>
+            <h2 className="text-4xl font-bold">叔叔阿姨，今天也要吃得开心！</h2>
             <p className="text-xl opacity-90 leading-relaxed max-w-2xl">
-              顺应四时，科学饮食。今天我们为您准备了清淡适口、易于消化的养生方案，希望能陪您度过健康愉快的一天。
+              我们通过 AI 专家系统为您实时定制了今日方案。遵循“早吃好、午吃饱、晚吃少”的古训，结合现代营养学，助您远离三高，神采奕奕。
             </p>
           </div>
-          <div className="absolute right-[-20px] bottom-[-20px] text-9xl opacity-10">🥗</div>
+          <div className="absolute right-[-40px] bottom-[-40px] text-[15rem] opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700">🥣</div>
         </section>
 
         {/* Daily Tip */}
         {plan?.dailyTip && (
-          <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg flex items-start gap-4 shadow-sm">
-            <span className="text-2xl">💡</span>
+          <div className="bg-white p-6 rounded-3xl border-2 border-amber-100 flex items-center gap-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center text-3xl shrink-0">✨</div>
             <div>
-              <p className="text-amber-900 font-bold mb-1">今日养生小贴士</p>
-              <p className="text-amber-800 text-lg">{plan.dailyTip}</p>
+              <p className="text-amber-800 font-black text-xl mb-1">今日养生心法</p>
+              <p className="text-gray-700 text-lg leading-relaxed">{plan.dailyTip}</p>
             </div>
           </div>
         )}
 
         {/* Recipes Grid */}
-        <section>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-2 h-8 bg-green-600 rounded-full"></div>
-            <h2 className="text-2xl font-bold text-gray-800">今日膳食推荐</h2>
+        <section className="space-y-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-10 bg-green-600 rounded-full"></div>
+              <h2 className="text-3xl font-bold text-gray-800">AI 定制食谱</h2>
+            </div>
+            {isLoadingImages && (
+              <div className="flex items-center gap-2 text-green-600 animate-pulse font-bold">
+                <span>🎨</span> AI 正在为您绘制精美餐图...
+              </div>
+            )}
           </div>
 
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-4">
-              <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
-              <p className="text-gray-500 text-lg">正在为您精心搭配今日食谱...</p>
+          {isLoading && !plan ? (
+            <div className="flex flex-col items-center justify-center py-32 space-y-6">
+              <div className="relative w-24 h-24">
+                <div className="absolute inset-0 border-8 border-green-100 rounded-full"></div>
+                <div className="absolute inset-0 border-8 border-green-600 rounded-full border-t-transparent animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-gray-600 text-2xl font-bold">正在联络 AI 营养专家...</p>
+                <p className="text-gray-400 mt-2">实时分析、科学搭配中</p>
+              </div>
             </div>
           ) : error ? (
-            <div className="text-center py-20">
-              <p className="text-red-500 text-xl mb-4">{error}</p>
+            <div className="bg-red-50 p-10 rounded-3xl text-center border-2 border-red-100">
+              <p className="text-red-500 text-2xl font-bold mb-6">{error}</p>
               <button 
                 onClick={fetchPlan}
-                className="bg-green-600 text-white px-8 py-3 rounded-full font-bold hover:bg-green-700 transition-colors"
+                className="bg-red-500 text-white px-10 py-4 rounded-full font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-100"
               >
-                重试一下
+                再次尝试调取
               </button>
             </div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-10">
               {plan && [
                 { ...plan.breakfast, type: '早餐' as const }, 
                 { ...plan.lunch, type: '午餐' as const }, 
                 { ...plan.dinner, type: '晚餐' as const }
               ].map((recipe, idx) => (
-                <RecipeCard key={idx} recipe={recipe} isLoadingImage={isLoadingImages} />
+                <RecipeCard key={idx} recipe={recipe} isLoadingImage={isLoadingImages && !recipe.imageUrl} />
               ))}
             </div>
           )}
         </section>
 
-        {/* Nutritionist Chat Section */}
-        <section>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-2 h-8 bg-orange-500 rounded-full"></div>
-            <h2 className="text-2xl font-bold text-gray-800">养生咨询台</h2>
+        {/* Chat Section */}
+        <section className="pt-10">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-3 h-10 bg-orange-500 rounded-full"></div>
+            <h2 className="text-3xl font-bold text-gray-800">随时问专家</h2>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2">
               <ChatInterface />
             </div>
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <span>🍵</span> 热门话题
+            <div className="space-y-8">
+              <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 relative overflow-hidden">
+                <h3 className="font-black text-2xl text-gray-800 mb-6 flex items-center gap-3">
+                  <span className="bg-orange-100 w-10 h-10 rounded-xl flex items-center justify-center text-xl">💬</span>
+                  老人家都在问
                 </h3>
-                <div className="flex flex-wrap gap-2">
-                  {['降压怎么吃', '睡不好吃什么', '燕麦片好吗', '春天养肝', '木耳怎么泡', '少吃盐的妙招'].map((tag) => (
-                    <span key={tag} className="bg-gray-100 px-3 py-1 rounded-full text-gray-600 text-base cursor-pointer hover:bg-green-100 hover:text-green-700 transition-colors">
-                      {tag}
-                    </span>
+                <div className="grid grid-cols-1 gap-3">
+                  {[
+                    '高血糖早餐吃什么？',
+                    '晚上睡不着，吃什么好？',
+                    '每天吃多少盐合适？',
+                    '降压操怎么配合饮食？',
+                    '五谷杂粮怎么搭配最养胃？'
+                  ].map((q) => (
+                    <button 
+                      key={q}
+                      className="text-left p-4 rounded-2xl bg-gray-50 text-gray-700 hover:bg-green-50 hover:text-green-700 transition-all border border-transparent hover:border-green-200 text-lg"
+                    >
+                      {q}
+                    </button>
                   ))}
                 </div>
               </div>
-              <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
-                <p className="text-green-800 text-base italic">
-                  “药补不如食补，食补不如动补。”
+
+              <div className="bg-gradient-to-br from-orange-500 to-red-500 p-8 rounded-[2rem] text-white shadow-xl">
+                <p className="text-lg font-bold italic leading-relaxed">
+                  “早晨一杯白开水，胜过良药一箩筐。老祖宗的话，咱们得听，也得用现代办法听。”
                 </p>
-                <p className="text-green-700 text-sm mt-2 font-bold">— 传统健康箴言</p>
+                <div className="mt-6 flex items-center gap-3 text-sm font-bold opacity-80 uppercase tracking-widest">
+                  <div className="w-8 h-[2px] bg-white"></div>
+                  养生之道
+                </div>
               </div>
             </div>
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="text-center py-10 text-gray-400 text-base">
-        <p>© 2024 长辈养生管家 · 您身边的健康饮食助手</p>
-        <p className="text-sm mt-1">温馨提示：本网站食谱仅供参考，若有慢性疾病请谨遵医嘱。</p>
+      <footer className="mt-20 border-t border-gray-100 bg-white py-12">
+        <div className="max-w-5xl mx-auto px-4 text-center">
+          <div className="flex justify-center gap-8 mb-6 text-2xl opacity-50">
+            <span>🥗</span><span>🍵</span><span>🍲</span><span>🍎</span>
+          </div>
+          <p className="text-gray-400 font-medium">长辈养生管家 v2.0 · 基于 Gemini AI 技术驱动</p>
+          <p className="text-gray-300 text-sm mt-2 max-w-lg mx-auto">
+            免责声明：本站提供之食谱均由 AI 专家模型生成，旨在推广健康饮食理念。若您有明确的疾病诊断或正在服药，请务必以您的主治医生建议为准。
+          </p>
+        </div>
       </footer>
     </div>
   );

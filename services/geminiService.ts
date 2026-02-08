@@ -1,7 +1,8 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { DailyPlan, Recipe } from "../types";
 
+// 初始化 AI 客户端
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
 const PLAN_SCHEMA = {
@@ -45,9 +46,19 @@ const PLAN_SCHEMA = {
   required: ["breakfast", "lunch", "dinner", "dailyTip"]
 };
 
+/**
+ * 核心功能：调取 API 生成每日养生食谱
+ */
 export async function generateDailyPlan(): Promise<DailyPlan> {
   const dateStr = new Date().toLocaleDateString('zh-CN');
-  const prompt = `你是专门负责55-75岁老年人健康管理的营养专家。请为今天(${dateStr})生成一份完整的养生食谱。要求：清淡、易消化、少油少盐少糖，符合中国家庭日常饮食习惯，语言通俗、亲切。包含早餐、午餐、晚餐和一条养生小贴士。早餐需包含主食、蛋白质和蔬菜。`;
+  const prompt = `你是一位拥有30年中医背景的老年健康管理专家。
+  请为55-75岁的长辈生成今天的(${dateStr})养生食谱。
+  要求：
+  1. 早餐：必须包含粗粮主食、优质蛋白（蛋奶豆）和温热蔬菜，强调唤醒肠胃。
+  2. 午餐：丰盛但少油盐，适合家庭烹饪，必须有一道深色蔬菜，预防高血压/高血脂。
+  3. 晚餐：极简、易消化，强调助眠和减轻肠胃负担。
+  4. 语言风格：像邻家女儿一样亲切，用通俗的话解释“养生心法”。
+  不要使用“治愈”、“特效”等夸大词汇。`;
 
   try {
     const response = await ai.models.generateContent({
@@ -59,31 +70,29 @@ export async function generateDailyPlan(): Promise<DailyPlan> {
       },
     });
 
-    const data = JSON.parse(response.text);
+    const data = JSON.parse(response.text || "{}");
     return {
       date: dateStr,
       ...data
     };
   } catch (error) {
-    console.error("Error generating plan:", error);
+    console.error("API 调用失败:", error);
     throw error;
   }
 }
 
+/**
+ * 调取 API 生成菜品图像
+ */
 export async function generateRecipeImage(prompt: string): Promise<string> {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
-          { text: `A highly appetizing, home-style Chinese healthy dish for seniors: ${prompt}. Bright, soft natural lighting, elegant ceramic dish, looks warm and delicious. Avoid high contrast or cluttered backgrounds.` },
+          { text: `Chinese home-style healthy cooking, elderly friendly, soft lighting, close-up shot of ${prompt}. The food looks steamed or lightly sautéed, very fresh and natural, served on a warm-colored ceramic plate.` },
         ],
       },
-      config: {
-        imageConfig: {
-          aspectRatio: "1:1"
-        }
-      }
     });
 
     for (const part of response.candidates[0].content.parts) {
@@ -91,23 +100,34 @@ export async function generateRecipeImage(prompt: string): Promise<string> {
         return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-    return 'https://picsum.photos/400/400';
+    return '';
   } catch (error) {
-    console.error("Error generating image:", error);
-    return 'https://picsum.photos/400/400';
+    console.error("生图 API 失败:", error);
+    return '';
   }
 }
 
-export async function chatWithNutritionist(userMessage: string, history: {role: string, content: string}[]): Promise<string> {
+/**
+ * 调取 API 进行流式对话
+ */
+export async function* chatWithNutritionistStream(userMessage: string) {
   const chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     config: {
-      systemInstruction: '你是一位亲切的AI中医养生营养师，专门为55-75岁的退休长辈服务。你的语言风格要亲切、有耐心，多用鼓励的话语。不要使用复杂的医学术语。强调清淡饮食和预防慢性病。如果遇到严重的健康问题，请温和地提醒长辈咨询医生。不要夸大某种食物的疗效。',
+      systemInstruction: `你是一位亲切的AI中医养生营养师。
+      目标人群：55-75岁退休老人。
+      原则：
+      1. 必须通俗易懂，多用比喻。
+      2. 强调少盐少油，预防慢病。
+      3. 必须包含中医小知识（如穴位按揉、食疗性质）。
+      4. 绝对严禁提供处方药建议。
+      5. 语气要像老朋友聊天。`,
     },
   });
 
-  // Sending history isn't directly supported in simpler chat calls here without building contents,
-  // let's just send the message for simplicity in this session-less approach.
-  const response = await chat.sendMessage({ message: userMessage });
-  return response.text;
+  const result = await chat.sendMessageStream({ message: userMessage });
+  for await (const chunk of result) {
+    const part = chunk as GenerateContentResponse;
+    yield part.text || "";
+  }
 }
